@@ -1,0 +1,94 @@
+#!/usr/bin/env zsh
+set  -eu
+
+rainbow_palette=(
+    196 202 208 214 220 226 226 190 154 82 46 46 47 48 49
+    50 51 45 39 33 27 21 21 57 129 165 201 200 199 198 197
+)
+
+window_rainbow_limit=16
+window_rainbow_offset=-1
+window_rainbow_step=5
+update_interval=1
+
+# Status message shown in the right status segment. Zsh prompt escapes are
+# expanded and each character is colored.
+base_system_status=" %D{%F (%a) %T} "
+
+
+main() {
+    local phase=
+    local phase_color=
+    local enh_style=
+    local dim_style=
+    local bak_win_format=
+    local cur_win_format=
+    local i=
+    local color=
+
+    def_win_format="#[bg=colour16, fg=colour231, bold]"
+    cur_win_format="#[fg=colour16, bg=colour231, bold]"
+
+    for (( i = 0; i < window_rainbow_limit; i++ )); do
+        color=$(rainbow $(( window_rainbow_offset + window_rainbow_step * i )))
+        def_win_format+="#{?#{==:#I,${i}},#[fg=colour${color}],}"
+        cur_win_format+="#{?#{==:#I,${i}},#[bg=colour${color}],}"
+    done
+
+    def_win_format+="#[reverse] #I #[noreverse, nobold] #W "
+    cur_win_format+=" #I  #W "
+
+    tmux set -g window-status-separator      "#[bg=colour16] "
+    tmux set -g window-status-format         "${def_win_format}"
+    tmux set -g window-status-current-format "${cur_win_format}"
+    tmux set -g status-left                  ""
+
+    while :; do
+        phase="%D{%s}"
+        phase=${(%)phase}
+        phase_color="colour$(rainbow ${phase})"
+
+        enh_style="bg=${phase_color}, fg=colour16"
+        dim_style="bg=default, fg=${phase_color}"
+
+        tmux set -g status-style             "${enh_style}"
+        tmux set -g mode-style               "${enh_style}"
+        tmux set -g message-style            "${enh_style}"
+        tmux set -g message-command-style    "${enh_style}"
+        tmux set -g pane-border-style        "${dim_style}"
+        tmux set -g pane-active-border-style "${enh_style}"
+        tmux set -g status-left-style        "fg=colour16, bg=${phase_color}"
+        tmux set -g status-right             "$(make_system_status ${phase})"
+
+        sleep ${update_interval}
+    done
+}
+
+make_system_status() {
+    local phase=$1
+    local chars=( ${(s::)${(%)base_system_status}} )
+    local deco_text=
+    local i=
+    local color=
+
+    deco_text="#[bg=colour16, bold]"
+    for (( i = 1; i <= ${#chars}; i++ )); do
+        color=$(rainbow $(( i + phase )))
+        deco_text+="#[fg=colour${color}]"
+        deco_text+=${chars[i]}
+    done
+
+    echo "${deco_text}"
+}
+
+rainbow() {
+    local n=${#rainbow_palette}
+    local i=$1
+    if (( i < 0 )); then
+        i=$(( n - (-i % n) ))
+    fi
+    i=$(( i % n ))
+    echo "${rainbow_palette[i + 1]}"
+}
+
+main
